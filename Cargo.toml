@@ -1,0 +1,56 @@
+[package]
+name = "ob-link"
+version = "0.1.0"
+authors = ["Ole Bauck <ole.bauck@remarkable.no>"]
+edition = "2021"
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+# defmt = "1.0"
+# defmt-rtt = { version = "1.1", features = ["disable-blocking-mode"] }
+# critical-section = "1.2.0"
+
+# TODO: Change this back to https://github.com/ch32-rs/ch32-hal.git when this PR is merged: https://github.com/ch32-rs/ch32-hal/pull/137
+ch32-hal = { git = "https://github.com/moore/ch32-hal.git", features = [
+    "ch32v203g6u6",
+    "embassy",
+    "time-driver-tim2",
+    "rt",
+    "memory-x",
+    # "defmt",
+] }
+# Must use spin because of broken WFI + USB: https://github.com/ch32-rs/ch32-hal/pull/94#issuecomment-3194601636
+embassy-executor = { version = "0.7.0", features = [
+    "arch-spin",
+    "executor-thread",
+    "task-arena-size-2048",
+] }
+embassy-usb = { version = "0.5", features = [
+    "max-interface-count-5",
+    "max-handler-count-5"
+]}
+embassy-time = { version = "0.4.0", features = ["defmt"]}
+embassy-futures = "0.1.2"
+
+qingke-rt = "0.5.0"
+qingke = "0.5.0"
+embedded-hal = "1.0.0"
+panic-halt = "1.0.0"
+bitfield-struct = "0.12"
+bytemuck = { version = "1.21", default-features = false}
+static_cell = "2.1"
+portable-atomic = { version = "1.3", features = ["unsafe-assume-single-core"] }
+dap-rs = "0.2"
+
+[profile.dev]
+opt-level = 's'
+
+[profile.release]
+strip = false     # symbols are not flashed to the microcontroller, so don't strip them.
+codegen-units = 1 # LLVM can perform better optimizations using a single thread
+debug = 2
+debug-assertions = false
+incremental = false
+lto = 'fat'
+opt-level = 's'
+overflow-checks = false
