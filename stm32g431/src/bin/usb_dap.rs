@@ -5,7 +5,7 @@ use cortex_m::peripheral::{syst::SystClkSource, Peripherals as CorePeripherals, 
 use dap_rs::dap::{Dap, DapLeds, DelayNs, HostStatus};
 use defmt::{error, info};
 use embassy_executor::Spawner;
-use embassy_stm32::gpio::{Flex, Level, Pull, Speed};
+use embassy_stm32::gpio::{Flex, Level, Output, Pull, Speed};
 use embassy_stm32::time::Hertz;
 use embassy_stm32::usb::{self, Driver};
 use embassy_stm32::{bind_interrupts, peripherals, Config};
@@ -30,6 +30,7 @@ async fn dap_task(
     swdio_pin: Flex<'static>,
     swclk_pin: Flex<'static>,
     nreset_pin: Flex<'static>,
+    led_pin: Output<'static>,
 ) -> ! {
     let swdio = DebuggerPin::new(swdio_pin, Pull::Down);
     let swclk = DebuggerPin::new(swclk_pin, Pull::Down);
@@ -41,7 +42,7 @@ async fn dap_task(
     let bit_bang_delay = MyDelay::new(core_peripherals_1.SYST, CPU_FREQUENCY);
     let wait = MyDelay::new(core_peripherals_2.SYST, CPU_FREQUENCY);
 
-    let leds = MyLeds {};
+    let leds = MyLeds { pin: led_pin };
 
     let context = Context::from_pins(swdio, swclk, nreset, CPU_FREQUENCY, bit_bang_delay);
     let swo: Option<Swo> = None;
@@ -111,7 +112,7 @@ async fn main(spawner: Spawner) {
     // Create embassy-usb Config
     let mut config = embassy_usb::Config::new(0x1a86, 0x7021);
     config.manufacturer = Some("Bauck");
-    config.product = Some("OB-Link (CMSIS-DAP v2)"); // Need to have "CMSIS-DAP" in the product name to make probe-rs recognize it
+    config.product = Some("OB-Link-STM32G431 (CMSIS-DAP v2)"); // Need to have "CMSIS-DAP" in the product name to make probe-rs recognize it
     config.serial_number = Some("12345678");
 
     let mut builder = {
@@ -148,6 +149,7 @@ async fn main(spawner: Spawner) {
             Flex::new(p.PA0),
             Flex::new(p.PA1),
             Flex::new(p.PA4),
+            Output::new(p.PC6, Level::Low, Speed::High),
         ))
         .unwrap();
 
@@ -273,13 +275,21 @@ impl<'a> DbgPin for DebuggerPin<'a> {
     }
 }
 
-struct MyLeds {}
+struct MyLeds<'a> {
+    pin: Output<'a>,
+}
 
-impl DapLeds for MyLeds {
+impl<'a> DapLeds for MyLeds<'a> {
     fn react_to_host_status(&mut self, host_status: HostStatus) {
         match host_status {
-            HostStatus::Connected(_val) => {}
-            HostStatus::Running(_val) => {}
+            HostStatus::Connected(val) => match val {
+                true => self.pin.set_high(),
+                false => self.pin.set_low(),
+            },
+            HostStatus::Running(val) => match val {
+                true => self.pin.set_high(),
+                false => self.pin.set_low(),
+            },
         }
     }
 }

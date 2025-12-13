@@ -48,5 +48,6 @@ debug = 2
 debug-assertions = false
 incremental = false
 lto = 'fat'
+# Should use opt-level = 3 to get better speed when running dap, but this will use more than 32K of flash (about 35782 => 3014 bytes too much)
 opt-level = 's'
 overflow-checks = false
