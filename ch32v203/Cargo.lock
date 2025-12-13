@@ -113,6 +113,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "ch32v203"
+version = "0.1.0"
+dependencies = [
+ "bitfield-struct",
+ "bytemuck",
+ "ch32-hal",
+ "dap-rs",
+ "embassy-executor",
+ "embassy-futures",
+ "embassy-time",
+ "embassy-usb",
+ "embedded-hal 1.0.0",
+ "ob-dap",
+ "panic-halt",
+ "portable-atomic",
+ "qingke",
+ "qingke-rt",
+ "static_cell",
+]
+
+[[package]]
 name = "critical-section"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -595,23 +616,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "ob-link"
+name = "ob-dap"
 version = "0.1.0"
 dependencies = [
- "bitfield-struct",
- "bytemuck",
- "ch32-hal",
  "dap-rs",
- "embassy-executor",
- "embassy-futures",
- "embassy-time",
- "embassy-usb",
  "embedded-hal 1.0.0",
- "panic-halt",
- "portable-atomic",
- "qingke",
- "qingke-rt",
- "static_cell",
 ]
 
 [[package]]

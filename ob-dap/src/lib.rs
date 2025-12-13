@@ -1,3 +1,6 @@
+#![no_std]
+#![no_main]
+
 use dap_rs::{swj::Dependencies, *};
 use embedded_hal::digital::PinState;
 

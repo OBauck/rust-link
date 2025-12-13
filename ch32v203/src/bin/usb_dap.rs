@@ -12,7 +12,7 @@ use hal::pac::{systick, SYSTICK};
 use hal::usbd::Driver;
 use hal::{bind_interrupts, peripherals, println};
 
-use ob_link::dap::{self, DbgDelay, DbgPin, Swo};
+use ob_dap::{self, Context, DbgDelay, DbgPin, Swo};
 
 use static_cell::StaticCell;
 
@@ -46,7 +46,7 @@ async fn dap_task(
 
     let leds = MyLeds {};
 
-    let context = dap::Context::from_pins(swdio, swclk, nreset, CPU_FREQUENCY, bit_bang_delay);
+    let context = Context::from_pins(swdio, swclk, nreset, CPU_FREQUENCY, bit_bang_delay);
     let swo: Option<Swo> = None;
 
     let mut dap_handler = Dap::new(context, leds, wait, swo, "V1");
