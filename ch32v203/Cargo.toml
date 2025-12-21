@@ -14,16 +14,15 @@ ch32-hal = { git = "https://github.com/moore/ch32-hal.git", features = [
     # "defmt",
 ] }
 # Must use spin because of broken WFI + USB: https://github.com/ch32-rs/ch32-hal/pull/94#issuecomment-3194601636
-embassy-executor = { version = "0.7.0", features = [
+embassy-executor = { version = "0.9.1", features = [
     "arch-spin",
     "executor-thread",
-    "task-arena-size-2048",
 ] }
 embassy-usb = { version = "0.5", features = [
     "max-interface-count-5",
     "max-handler-count-5"
 ]}
-embassy-time = { version = "0.4.0", features = ["defmt"]}
+embassy-time = { version = "0.5.0" }
 embassy-futures = "0.1.2"
 
 qingke-rt = "0.5.0"
