@@ -119,7 +119,7 @@ async fn main(spawner: Spawner) {
         static CONFIG_DESCRIPTOR: StaticCell<[u8; 256]> = StaticCell::new();
         static BOS_DESCRIPTOR: StaticCell<[u8; 256]> = StaticCell::new();
         static MSOS_DESCRIPTOR: StaticCell<[u8; 256]> = StaticCell::new();
-        static CONTROL_BUF: StaticCell<[u8; 64]> = StaticCell::new();
+        static CONTROL_BUF: StaticCell<[u8; 96]> = StaticCell::new();
 
         let builder = embassy_usb::Builder::new(
             driver,
@@ -127,7 +127,7 @@ async fn main(spawner: Spawner) {
             CONFIG_DESCRIPTOR.init([0; 256]),
             BOS_DESCRIPTOR.init([0; 256]),
             MSOS_DESCRIPTOR.init([0; 256]),
-            CONTROL_BUF.init([0; 64]),
+            CONTROL_BUF.init([0; 96]),
         );
         builder
     };
