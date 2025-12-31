@@ -8,7 +8,7 @@ use embassy_futures::select::{select3, Either3};
 use embassy_stm32::time::Hertz;
 use embassy_stm32::usart::BufferedUart;
 use embassy_stm32::usb::Driver;
-use embassy_stm32::{bind_interrupts, peripherals, usart, usb, Config, Peri};
+use embassy_stm32::{bind_interrupts, peripherals, usart, usb, Config};
 use embassy_usb::class::cdc_acm::{CdcAcmClass, State};
 use embassy_usb::driver::Driver as UsbDriver;
 use {defmt_rtt as _, panic_probe as _};
@@ -19,6 +19,7 @@ use static_cell::StaticCell;
 bind_interrupts!(struct Irqs {
     USB_LP => usb::InterruptHandler<peripherals::USB>;
     USART1 => usart::BufferedInterruptHandler<peripherals::USART1>;
+    USART2 => usart::BufferedInterruptHandler<peripherals::USART2>;
 });
 
 pub trait UartBaud {
@@ -86,26 +87,11 @@ pub async fn run<'d, D: UsbDriver<'d>>(
     }
 }
 
-#[embassy_executor::task]
+#[embassy_executor::task(pool_size = 2)]
 async fn uart_task(
     class: CdcAcmClass<'static, Driver<'static, peripherals::USB>>,
-    usart: Peri<'static, peripherals::USART1>,
-    rx_pin: Peri<'static, peripherals::PA10>,
-    tx_pin: Peri<'static, peripherals::PA9>,
+    buf_usart: BufferedUart<'static>,
 ) -> ! {
-    let mut tx_buf = [0u8; 64];
-    let mut rx_buf = [0u8; 64];
-    let buf_usart = BufferedUart::new(
-        usart,
-        rx_pin,
-        tx_pin,
-        &mut tx_buf,
-        &mut rx_buf,
-        Irqs,
-        Default::default(),
-    )
-    .unwrap();
-
     run(buf_usart, class).await;
 }
 
@@ -176,12 +162,48 @@ async fn main(spawner: Spawner) {
         CdcAcmClass::new(&mut builder, state, 64)
     };
 
+    let buf_usart = {
+        static TX_BUF: StaticCell<[u8; 64]> = StaticCell::new();
+        static RX_BUF: StaticCell<[u8; 64]> = StaticCell::new();
+        BufferedUart::new(
+            p.USART1,
+            p.PA10,
+            p.PA9,
+            TX_BUF.init([0; 64]),
+            RX_BUF.init([0; 64]),
+            Irqs,
+            Default::default(),
+        )
+        .unwrap()
+    };
+
+    spawner.spawn(uart_task(class, buf_usart)).unwrap();
+
+    let class = {
+        static STATE: StaticCell<State> = StaticCell::new();
+        let state = STATE.init(State::new());
+        CdcAcmClass::new(&mut builder, state, 64)
+    };
+
+    let buf_usart = {
+        static TX_BUF: StaticCell<[u8; 64]> = StaticCell::new();
+        static RX_BUF: StaticCell<[u8; 64]> = StaticCell::new();
+        BufferedUart::new(
+            p.USART2,
+            p.PA3,
+            p.PA2,
+            TX_BUF.init([0; 64]),
+            RX_BUF.init([0; 64]),
+            Irqs,
+            Default::default(),
+        )
+        .unwrap()
+    };
+
+    spawner.spawn(uart_task(class, buf_usart)).unwrap();
+
     // Build the builder.
     let mut usb = builder.build();
-
-    spawner
-        .spawn(uart_task(class, p.USART1, p.PA10, p.PA9))
-        .unwrap();
 
     // Run the USB device.
     usb.run().await;
