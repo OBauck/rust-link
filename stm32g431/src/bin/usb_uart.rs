@@ -10,7 +10,7 @@ use embassy_stm32::{bind_interrupts, peripherals, usart, usb, Config};
 use embassy_usb::class::cdc_acm::{CdcAcmClass, State};
 use {defmt_rtt as _, panic_probe as _};
 
-use ob_link_common::usb_uart::run as usb_uart_run;
+use ob_link_common::usb_uart::run_split_uart as usb_uart_run;
 use static_cell::StaticCell;
 
 bind_interrupts!(struct Irqs {
@@ -24,7 +24,8 @@ async fn usb_uart_task(
     class: CdcAcmClass<'static, Driver<'static, peripherals::USB>>,
     buf_usart: BufferedUart<'static>,
 ) -> ! {
-    usb_uart_run(buf_usart, class).await;
+    let (usart_tx, usart_rx) = buf_usart.split();
+    usb_uart_run(usart_tx, usart_rx, class).await;
 }
 
 #[embassy_executor::main]
