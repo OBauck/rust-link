@@ -1,19 +1,16 @@
 #![no_std]
 #![no_main]
 
-use defmt::{error, info, Debug2Format};
+use defmt::info;
 use embassy_executor::Spawner;
-use embassy_futures::join::join;
-use embassy_futures::select::{select3, Either3};
 use embassy_stm32::time::Hertz;
 use embassy_stm32::usart::BufferedUart;
 use embassy_stm32::usb::Driver;
 use embassy_stm32::{bind_interrupts, peripherals, usart, usb, Config};
 use embassy_usb::class::cdc_acm::{CdcAcmClass, State};
-use embassy_usb::driver::Driver as UsbDriver;
 use {defmt_rtt as _, panic_probe as _};
 
-use embedded_io_async::{BufRead, Write};
+use ob_link_common::usb_uart::run as usb_uart_run;
 use static_cell::StaticCell;
 
 bind_interrupts!(struct Irqs {
@@ -22,77 +19,12 @@ bind_interrupts!(struct Irqs {
     USART2 => usart::BufferedInterruptHandler<peripherals::USART2>;
 });
 
-pub trait UartBaud {
-    fn set_baud(&mut self, baudrate: u32);
-}
-
-impl<'d> UartBaud for BufferedUart<'d> {
-    fn set_baud(&mut self, baudrate: u32) {
-        let _ = self.set_baudrate(baudrate);
-    }
-}
-
-pub async fn run<'d, D: UsbDriver<'d>>(
-    mut usart: impl BufRead + Write + UartBaud,
-    cdc_acm: CdcAcmClass<'d, D>,
-) -> ! {
-    let mut usb_buf = [0; 64];
-
-    let (mut usb_tx, mut usb_rx, usb_control) = cdc_acm.split_with_control();
-
-    loop {
-        join(usb_rx.wait_connection(), usb_tx.wait_connection()).await;
-        info!("Connected");
-        loop {
-            match select3(
-                usb_control.control_changed(),
-                usb_rx.read_packet(&mut usb_buf),
-                usart.fill_buf(),
-            )
-            .await
-            {
-                Either3::First(_) => {
-                    let baud = usb_rx.line_coding().data_rate();
-                    info!("Setting baud to: {}", baud);
-                    usart.set_baud(baud);
-                }
-                Either3::Second(res) => match res {
-                    Err(err) => {
-                        error!("Disconnected {:?}", err);
-                        break;
-                    }
-                    Ok(n) => {
-                        if let Err(err) = usart.write(&usb_buf[0..n]).await {
-                            error!("Unable to write to usart: {:?}", Debug2Format(&err));
-                        }
-                    }
-                },
-                Either3::Third(res) => {
-                    let usart_buf = match res {
-                        Err(err) => {
-                            error!("usart buf error: {:?}", Debug2Format(&err));
-                            continue;
-                        }
-                        Ok(buf) => buf,
-                    };
-                    if let Err(err) = usb_tx.write_packet(usart_buf).await {
-                        error!("Disconnected {:?}", err);
-                        break;
-                    }
-                    let n = usart_buf.len();
-                    usart.consume(n);
-                }
-            }
-        }
-    }
-}
-
 #[embassy_executor::task(pool_size = 2)]
-async fn uart_task(
+async fn usb_uart_task(
     class: CdcAcmClass<'static, Driver<'static, peripherals::USB>>,
     buf_usart: BufferedUart<'static>,
 ) -> ! {
-    run(buf_usart, class).await;
+    usb_uart_run(buf_usart, class).await;
 }
 
 #[embassy_executor::main]
@@ -177,7 +109,7 @@ async fn main(spawner: Spawner) {
         .unwrap()
     };
 
-    spawner.spawn(uart_task(class, buf_usart)).unwrap();
+    spawner.spawn(usb_uart_task(class, buf_usart)).unwrap();
 
     let class = {
         static STATE: StaticCell<State> = StaticCell::new();
@@ -200,7 +132,7 @@ async fn main(spawner: Spawner) {
         .unwrap()
     };
 
-    spawner.spawn(uart_task(class, buf_usart)).unwrap();
+    spawner.spawn(usb_uart_task(class, buf_usart)).unwrap();
 
     // Build the builder.
     let mut usb = builder.build();

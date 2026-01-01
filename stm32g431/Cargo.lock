@@ -707,6 +707,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "ob-link-common"
+version = "0.1.0"
+dependencies = [
+ "defmt 1.0.1",
+ "embassy-futures",
+ "embassy-stm32",
+ "embassy-usb",
+ "embedded-io-async",
+ "static_cell",
+]
+
+[[package]]
 name = "once_cell"
 version = "1.21.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -926,13 +938,12 @@ dependencies = [
  "defmt 1.0.1",
  "defmt-rtt",
  "embassy-executor",
- "embassy-futures",
  "embassy-stm32",
  "embassy-time",
  "embassy-usb",
  "embedded-hal 1.0.0",
- "embedded-io-async",
  "ob-dap",
+ "ob-link-common",
  "panic-halt",
  "panic-probe",
  "portable-atomic",
