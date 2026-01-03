@@ -3,11 +3,24 @@
 
 use ch32_hal as hal;
 use embassy_executor::Spawner;
+use embassy_futures::join::join;
+use embassy_futures::select::{select, Either};
 use embassy_usb::class::cdc_acm::{CdcAcmClass, State};
-use embassy_usb::driver::EndpointError;
-use hal::usbd::{Driver, Instance};
-use hal::{bind_interrupts, peripherals, println};
+use hal::usbd::Driver;
+use hal::{bind_interrupts, peripherals, println as ch32_println};
 use static_cell::StaticCell;
+
+#[macro_export]
+macro_rules! my_println {
+    ($($arg:tt)*) => {
+        ()
+    };
+}
+
+// Println fucks up because it is blocking
+// When no debugger is connected, the fw just hangs
+// TODO: Switch to ringbuffer + defmt (see defmt_rtt crate for inspiration or use this: https://crates.io/crates/defmt-bbq)
+use my_println as println;
 
 bind_interrupts!(struct Irqs {
     USB_LP_CAN1_RX0 => hal::usbd::InterruptHandler<hal::peripherals::USBD>;
@@ -21,36 +34,36 @@ fn panic(_info: &core::panic::PanicInfo) -> ! {
     loop {}
 }
 
-struct Disconnected {}
-
-impl From<EndpointError> for Disconnected {
-    fn from(val: EndpointError) -> Self {
-        match val {
-            EndpointError::BufferOverflow => panic!("Buffer overflow"),
-            EndpointError::Disabled => Disconnected {},
-        }
-    }
-}
-
-async fn echo<'d, T: Instance + 'd>(
-    class: &mut CdcAcmClass<'d, Driver<'d, T>>,
-) -> Result<(), Disconnected> {
-    let mut buf = [0; 64];
-    loop {
-        let n = class.read_packet(&mut buf).await?;
-        let data = &buf[..n];
-        // println!("Data: {data:X?}");
-        class.write_packet(data).await?;
-    }
-}
-
 #[embassy_executor::task]
-async fn uart_task(mut class: CdcAcmClass<'static, Driver<'static, peripherals::USBD>>) -> ! {
+async fn uart_task(class: CdcAcmClass<'static, Driver<'static, peripherals::USBD>>) -> ! {
+    let mut buf = [0; 64];
+
+    let (mut usb_tx, mut usb_rx, usb_control) = class.split_with_control();
+
     loop {
-        class.wait_connection().await;
+        join(usb_rx.wait_connection(), usb_tx.wait_connection()).await;
         println!("Connected");
-        let _ = echo(&mut class).await;
-        println!("Disconnected");
+        loop {
+            match select(usb_control.control_changed(), usb_rx.read_packet(&mut buf)).await {
+                Either::First(_) => {
+                    let baud = usb_rx.line_coding().data_rate();
+                    println!("Baud change: {:?}", baud);
+                }
+                Either::Second(res) => match res {
+                    Err(err) => {
+                        println!("Usb rx error: {:?}. Assume disconnection", err);
+                        break;
+                    }
+                    Ok(n) => {
+                        // Echo data
+                        if let Err(err) = usb_tx.write_packet(&buf[..n]).await {
+                            println!("Usb tx error: {:?}. Assume disconnection", err);
+                            break;
+                        }
+                    }
+                },
+            }
+        }
     }
 }
 
