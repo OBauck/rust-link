@@ -50,37 +50,42 @@ pub async fn run<'d, D: Driver<'d>>(
                 }
                 Either3::Second(Err(_err)) => {
                     #[cfg(feature = "defmt")]
-                    defmt::warn!("Disconnected {:?}", defmt::Debug2Format(&_err));
+                    defmt::warn!(
+                        "Usb read error: {:?}. Assume disconnection",
+                        defmt::Debug2Format(&_err)
+                    );
                     break;
                 }
                 Either3::Second(Ok(n)) => {
-                    let mut start = 0;
+                    let mut bytes_sent = 0;
                     loop {
-                        match usart.write(&usb_buf[start..n]).await {
+                        match usart.write(&usb_buf[bytes_sent..n]).await {
                             Err(_err) => {
                                 #[cfg(feature = "defmt")]
-                                defmt::warn!(
-                                    "Unable to write to usart: {:?}",
-                                    defmt::Debug2Format(&_err)
+                                defmt::error!(
+                                    "Unable to write to usart: {:?}. Disguarding all remaining ({}) bytes",
+                                    defmt::Debug2Format(&_err),
+                                    n - bytes_sent
                                 );
                             }
-                            Ok(bytes_sent) => {
-                                start += bytes_sent;
-                            }
+                            Ok(sent) => bytes_sent += sent,
                         }
-                        if start == n {
+                        if bytes_sent == n {
                             break;
                         }
                     }
                 }
                 Either3::Third(Err(_err)) => {
                     #[cfg(feature = "defmt")]
-                    defmt::error!("usart buf error: {:?}", defmt::Debug2Format(&_err));
+                    defmt::error!("Uart read error: {:?}", defmt::Debug2Format(&_err));
                 }
                 Either3::Third(Ok(usart_buf)) => match usb_tx.write(usart_buf).await {
                     Err(_err) => {
                         #[cfg(feature = "defmt")]
-                        defmt::error!("Disconnected {:?}", defmt::Debug2Format(&_err));
+                        defmt::error!(
+                            "Usb write error: {:?}. Assume disconnection",
+                            defmt::Debug2Format(&_err)
+                        );
                         break;
                     }
                     Ok(n) => usart.consume(n),
@@ -144,7 +149,7 @@ pub async fn run_split_uart<'d, D: Driver<'d>>(
                     }
                     Either::Second(Err(_err)) => {
                         #[cfg(feature = "defmt")]
-                        defmt::warn!("Disconnected {:?}", defmt::Debug2Format(&_err));
+                        defmt::error!("Disconnected {:?}", defmt::Debug2Format(&_err));
                         break;
                     }
                     Either::Second(Ok(n)) => {
@@ -153,7 +158,7 @@ pub async fn run_split_uart<'d, D: Driver<'d>>(
                             match usart_tx.write(&usb_buf[start..n]).await {
                                 Err(_err) => {
                                     #[cfg(feature = "defmt")]
-                                    defmt::warn!(
+                                    defmt::error!(
                                         "Unable to write to usart: {:?}",
                                         defmt::Debug2Format(&_err)
                                     );
