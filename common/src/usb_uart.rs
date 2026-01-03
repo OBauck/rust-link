@@ -18,6 +18,21 @@ mod stm32 {
     }
 }
 
+#[cfg(feature = "rp")]
+mod rp {
+    impl super::UartBaud for embassy_rp::uart::BufferedUart {
+        fn set_baud(&mut self, baudrate: u32) {
+            let _ = self.set_baudrate(baudrate);
+        }
+    }
+    impl super::UartBaud for embassy_rp::uart::BufferedUartTx {
+        fn set_baud(&mut self, baudrate: u32) {
+            // Uncomment when this PR is merged: https://github.com/embassy-rs/embassy/pull/5159
+            // let _ = self.set_baudrate(baudrate);
+        }
+    }
+}
+
 pub trait UartBaud {
     fn set_baud(&mut self, baudrate: u32);
 }
