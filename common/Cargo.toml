@@ -7,14 +7,14 @@ edition = "2021"
 defmt = { version = "1.0.1", optional = true }
 embassy-usb = "0.5"
 embassy-futures = "0.1.2"
-embedded-io-async = "0.6.1"
+embedded-io-async = "0.7.0"
 embedded-hal = "1.0"
 static_cell = "2.1"
 bytemuck = { version = "1.21", default-features = false}
 bitfield-struct = "0.12"
 
-embassy-stm32 = {version = "0.4", optional = true }
-embassy-rp = {version = "0.8", optional = true }
+embassy-stm32 = {version = "0.5", optional = true }
+embassy-rp = {version = "0.10", optional = true }
 
 [features]
 defmt = ["dep:defmt"]
