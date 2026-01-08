@@ -10,7 +10,7 @@ panic-probe = { version = "1.0.0", features = ["print-defmt"] }
 cortex-m = { version = "0.7.6" }
 cortex-m-rt = "0.7.0"
 
-embassy-rp = { version = "0.8.0", features = ["defmt", "unstable-pac", "time-driver", "critical-section-impl", "rp235xa", "binary-info"] }
+embassy-rp = { version = "0.10.0", features = ["defmt", "unstable-pac", "time-driver", "critical-section-impl", "rp235xa", "binary-info"] }
 
 embassy-executor = { version = "0.9.1", features = [
     "arch-cortex-m",
