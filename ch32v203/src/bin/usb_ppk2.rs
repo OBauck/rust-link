@@ -11,24 +11,21 @@
 #![no_std]
 #![no_main]
 
+use ch32_hal::timer::{BasicInstance, CoreInstance};
 use embassy_executor::Spawner;
-use embassy_futures::select::{select, Either};
 use embassy_usb::class::cdc_acm::{CdcAcmClass, State};
-use embassy_usb::driver::EndpointError;
 
-use ch32_hal::{
-    self as hal, bind_interrupts, pac, println as ch32_println, Peripheral, PeripheralRef,
-};
-use embedded_hal::digital::OutputPin;
+use ch32_hal::{self as hal, bind_interrupts, pac, Peripheral, PeripheralRef};
 use hal::adc::{AdcChannel, AnyAdcChannel, SampleTime};
 use hal::dma::{ReadableRingBuffer, Request, TransferOptions};
 use hal::gpio::{Level, Output, Speed};
 use hal::peripherals::{ADC1, DMA1_CH1, PA6, PB4, TIM3, USBD};
 use hal::time::Hertz;
 use hal::timer::low_level::Timer as LowLevelTimer;
-use hal::usbd::{Driver, Instance as UsbInstance};
+use hal::usbd::Driver;
 
-use bitfield_struct::bitfield;
+use ob_link_common::usb_ppk2::{run as ppk2_run, Adc};
+
 use static_cell::StaticCell;
 
 #[macro_export]
@@ -47,130 +44,10 @@ bind_interrupts!(struct Irqs {
     USB_LP_CAN1_RX0 => hal::usbd::InterruptHandler<hal::peripherals::USBD>;
 });
 
-#[bitfield(u32)]
-pub struct Ppk2MeasurementData {
-    #[bits(14)]
-    pub adc_data: u16,
-    #[bits(3)]
-    pub range: u8,
-    #[bits(6)]
-    pub counter: u8,
-    #[bits(8)]
-    pub logic_data: u8,
-    #[bits(1)]
-    pub rsvd: bool,
-}
-
-#[repr(u8)]
-enum Commands {
-    NoOp = 0x00,
-    TriggerSet = 0x01,
-    AvgNumSet = 0x02,
-    TriggerWindowSet = 0x03,
-    TriggerIntervalSet = 0x04,
-    TriggerSingleSet = 0x05,
-    AverageStart = 0x06,
-    AverageStop = 0x07,
-    RangeSet = 0x08,
-    LcdSet = 0x09,
-    TriggerStop = 0x0A,
-    DeviceRunningSet = 0x0C,
-    RegulatorSet = 0x0D,
-    SwitchPointDown = 0x0E,
-    SwitchPointUp = 0x0F,
-    TriggerExtToggle = 0x10,
-    SetPowerMode = 0x11,
-    ResUserSet = 0x12,
-    SpikeFilteringOn = 0x15,
-    SpikeFilteringOff = 0x16,
-    GetMetaData = 0x19,
-    Reset = 0x20,
-    SetUserGains = 0x25,
-    Unkown(u8),
-}
-
-impl From<u8> for Commands {
-    fn from(value: u8) -> Self {
-        match value {
-            0x00 => Commands::NoOp,
-            0x01 => Commands::TriggerSet,
-            0x02 => Commands::AvgNumSet,
-            0x03 => Commands::TriggerWindowSet,
-            0x04 => Commands::TriggerIntervalSet,
-            0x05 => Commands::TriggerSingleSet,
-            0x06 => Commands::AverageStart,
-            0x07 => Commands::AverageStop,
-            0x08 => Commands::RangeSet,
-            0x09 => Commands::LcdSet,
-            0x0A => Commands::TriggerStop,
-            0x0C => Commands::DeviceRunningSet,
-            0x0D => Commands::RegulatorSet,
-            0x0E => Commands::SwitchPointDown,
-            0x0F => Commands::SwitchPointUp,
-            0x10 => Commands::TriggerExtToggle,
-            0x11 => Commands::SetPowerMode,
-            0x12 => Commands::ResUserSet,
-            0x15 => Commands::SpikeFilteringOn,
-            0x16 => Commands::SpikeFilteringOff,
-            0x19 => Commands::GetMetaData,
-            0x20 => Commands::Reset,
-            0x25 => Commands::SetUserGains,
-            _ => Commands::Unkown(value),
-        }
-    }
-}
-
-// TODO: Adjust these to match 2.2ohm shunt + gain of 50 ++
-static PPK2_META_DATA: &[u8] = concat!(
-    "Calibrated: 0\n",
-    "R0: 0.535\n", // Shunt resistor value
-    "R1: 1.0\n",
-    "R2: 1.0\n",
-    "R3: 1.0\n",
-    "R4: 1.0\n",
-    "GS0: 0.00215\n",
-    "GS1: 0.0\n",
-    "GS2: 0.0\n",
-    "GS3: 0.0\n",
-    "GS4: 0.0\n",
-    "GI0: 0.0215\n",
-    "GI1: 1.0\n",
-    "GI2: 1.0\n",
-    "GI3: 1.0\n",
-    "GI4: 1.0\n",
-    "O0: 0.0\n", // Offset voltage on ADC
-    "O1: 0.0\n",
-    "O2: 0.0\n",
-    "O3: 0.0\n",
-    "O4: 0.0\n",
-    "VDD: 3300\n",
-    "HW: 2663\n",
-    "mode: 1\n", // 1 = Ampere, 2 = SMU
-    "S0: 0.0\n",
-    "S1: 0.0\n",
-    "S2: 0.0\n",
-    "S3: 0.0\n",
-    "S4: 0.0\n",
-    "I0: -0.00023\n", // Offset current (?) TODO: Use offset voltage instead (should be 231) -> need to figure out how calculation works
-    "I1: 0.0\n",
-    "I2: 0.0\n",
-    "I3: 0.0\n",
-    "I4: 0.0\n",
-    "UG0: 1.0\n", // User gain, needs to be between 0.9 and 1.1
-    "UG1: 1.0\n",
-    "UG2: 1.0\n",
-    "UG3: 1.0\n",
-    "UG4: 1.0\n",
-    "IA: 56\n",
-    "END\n",
-)
-.as_bytes();
-
 const SAMPLING_FREQUENCY_KHZ: usize = 800;
 const ADC_BUFFER_SIZE: usize = 8 * 128 * 2; // RAM usage = (8 * 128 * 2) * 2 (bytes / u16) * 1.5 (data_buffer) = 6KB (6144bytes)
                                             // 2048 bytes adc_buffer + sampling frequency of 800KHz = interrupt every 1.28ms (1.25us * 1024)
 const OVERSAMPLING_FACTOR: usize = SAMPLING_FREQUENCY_KHZ / 100;
-const PPK2_SAMPLES_PER_USB_PACKET: usize = 16;
 
 #[panic_handler]
 fn panic(_info: &core::panic::PanicInfo) -> ! {
@@ -180,6 +57,53 @@ fn panic(_info: &core::panic::PanicInfo) -> ! {
     println!("Panic");
 
     loop {}
+}
+
+struct CH32Adc<'a, T: CoreInstance> {
+    timer: LowLevelTimer<'a, T>,
+    ring_buffer: ReadableRingBuffer<'a, u16>,
+    data_buffer: &'static mut [u16],
+}
+
+impl<'a, T> CH32Adc<'a, T>
+where
+    T: BasicInstance,
+{
+    fn new(
+        timer: LowLevelTimer<'a, T>,
+        ring_buffer: ReadableRingBuffer<'a, u16>,
+        data_buffer: &'static mut [u16],
+    ) -> Self {
+        Self {
+            timer,
+            ring_buffer,
+            data_buffer,
+        }
+    }
+}
+
+impl<'a, T> Adc for CH32Adc<'a, T>
+where
+    T: BasicInstance,
+{
+    async fn read_data(&mut self) -> &[u16] {
+        if let Err(err) = self.ring_buffer.read_exact(self.data_buffer).await {
+            println!("Error: {:?}", err);
+            self.ring_buffer.clear();
+        }
+        self.data_buffer
+    }
+
+    fn start(&mut self) {
+        println!("Starting sampling");
+        self.timer.start();
+    }
+
+    fn stop(&mut self) {
+        println!("Stopping sampling");
+        self.timer.stop();
+        self.ring_buffer.clear();
+    }
 }
 
 fn dma_setup<'d>(
@@ -249,7 +173,7 @@ fn adc_setup() {
 
 #[embassy_executor::task]
 async fn ppk2_task(
-    mut class: CdcAcmClass<'static, Driver<'static, USBD>>,
+    class: CdcAcmClass<'static, Driver<'static, USBD>>,
     power_out_enable_pin: PB4,
     adc_pin: PA6,
     dma_channel: PeripheralRef<'static, DMA1_CH1>,
@@ -267,28 +191,16 @@ async fn ppk2_task(
     // which will call this: self.set_mode_cnf(vals::Mode::INPUT, vals::Cnf::ANALOG_IN__PUSH_PULL_OUT);
     let _channel: AnyAdcChannel<ADC1> = adc_pin.degrade_adc();
     adc_setup();
-    let mut ring_buf = dma_setup(dma_channel, adc_buffer);
+    let ring_buf = dma_setup(dma_channel, adc_buffer);
     let tim = LowLevelTimer::new(timer);
     tim.set_frequency(Hertz(800_000));
     pac::TIM3
         .ctlr2()
         .modify(|w| w.set_mms(pac::timer::vals::Mms::UPDATE));
 
-    println!("Starting sampling");
-    tim.start();
+    let adc = CH32Adc::new(tim, ring_buf, data_buffer);
 
-    loop {
-        class.wait_connection().await;
-        println!("Connected");
-        let _ = ppk2_run(
-            &mut class,
-            &mut ring_buf,
-            data_buffer,
-            &mut power_out_enable,
-        )
-        .await;
-        println!("Disconnected");
-    }
+    ppk2_run(class, adc, power_out_enable, OVERSAMPLING_FACTOR, 12).await;
 }
 
 #[embassy_executor::main(entry = "qingke_rt::entry")]
@@ -352,143 +264,4 @@ async fn main(spawner: Spawner) {
 
     // Run the USB device.
     usb.run().await;
-}
-
-struct Disconnected {}
-
-impl From<EndpointError> for Disconnected {
-    fn from(val: EndpointError) -> Self {
-        match val {
-            EndpointError::BufferOverflow => panic!("Buffer overflow"),
-            EndpointError::Disabled => Disconnected {},
-        }
-    }
-}
-
-/*
-    Every data is 32bit, with this composition (nr_of_bits, bit_position)
-    const MEAS_ADC = generateMask(14, 0);
-    const MEAS_RANGE = generateMask(3, 14);
-    const MEAS_COUNTER = generateMask(6, 18);
-    const MEAS_LOGIC = generateMask(8, 24);
-*/
-
-fn make_ppk2_measurement_data(
-    adc_raw_data: &[u16],
-    adc_bit_resolution: usize,
-    counter: u32,
-    range: u8,
-) -> u32 {
-    let mut adc_data_sum = 0_u32;
-    for &raw_data in adc_raw_data {
-        adc_data_sum += raw_data as u32;
-    }
-
-    let adc_data = match adc_bit_resolution {
-        0..14 => adc_data_sum * (1 << (14 - adc_bit_resolution)) / adc_raw_data.len() as u32,
-        14 => adc_data_sum / adc_raw_data.len() as u32,
-        15.. => adc_data_sum / ((1 << (adc_bit_resolution - 14)) * adc_raw_data.len() as u32),
-    };
-
-    (adc_data & 0x3fff) | ((range as u32 & 0b111) << 14) | ((counter & 0b111111) << 18)
-}
-
-async fn ppk2_process_command<'d, T: UsbInstance + 'd, OUT: OutputPin>(
-    class: &mut CdcAcmClass<'d, Driver<'d, T>>,
-    usb_data: &[u8],
-    send_data_enable: &mut bool,
-    power_out_enable: &mut OUT,
-) -> Result<(), Disconnected> {
-    let command = Commands::from(usb_data[0]);
-    println!("Command data len: {}", usb_data.len());
-
-    match command {
-        Commands::GetMetaData => {
-            println!("Sending metadata");
-            for chunk in PPK2_META_DATA.chunks(64) {
-                class.write_packet(chunk).await?;
-            }
-        }
-        Commands::AverageStart => {
-            println!("Average start");
-            *send_data_enable = true;
-        }
-        Commands::AverageStop => {
-            println!("Average stop");
-            *send_data_enable = false;
-        }
-        Commands::DeviceRunningSet => {
-            match usb_data[1] {
-                0 => {
-                    let _ = power_out_enable.set_low();
-                    println!("Power out disable");
-                }
-                1 => {
-                    let _ = power_out_enable.set_high();
-                    println!("Power out enable");
-                }
-                data => println!("Invalid DeviceRunningSet data: {}", data),
-            }
-            println!("Device running: {}", usb_data[1])
-        }
-        Commands::RegulatorSet => {
-            println!(
-                "Regulator set: {}",
-                ((usb_data[1] as u16) << 8) | usb_data[2] as u16
-            );
-        }
-        Commands::Unkown(val) => println!("Unknown command: 0x{:x}", val),
-        _ => println!("Unsupported command: 0x{:x}", usb_data[0]),
-    }
-    Ok(())
-}
-
-async fn ppk2_run<'d, T: UsbInstance + 'd, OUT: OutputPin>(
-    class: &mut CdcAcmClass<'d, Driver<'d, T>>,
-    ring_buffer: &mut ReadableRingBuffer<'d, u16>,
-    data_buffer: &mut [u16],
-    power_out_enable: &mut OUT,
-) -> Result<(), Disconnected> {
-    let mut buf = [0; 64];
-    let mut measurement_counter = 0_u32;
-    let mut usb_data = [0_u32; PPK2_SAMPLES_PER_USB_PACKET];
-    let mut send_data_enable = false;
-
-    loop {
-        // TODO: Stop sampling if send_data_enable is 0
-        match select(
-            ring_buffer.read_exact(data_buffer),
-            class.read_packet(&mut buf),
-        )
-        .await
-        {
-            Either::First(res) => {
-                if let Err(err) = res {
-                    println!("Error: {:?}", err);
-                    ring_buffer.clear();
-                    continue;
-                }
-                if send_data_enable {
-                    // Original ppk2 sends 16 * 128 / 4 = 512 samples in bulk
-                    let mut i = 0;
-                    for data_chunk in data_buffer.chunks(OVERSAMPLING_FACTOR) {
-                        let data =
-                            make_ppk2_measurement_data(data_chunk, 12, measurement_counter, 0);
-                        usb_data[i] = data;
-                        measurement_counter += 1;
-                        i += 1;
-                        if i == PPK2_SAMPLES_PER_USB_PACKET {
-                            class.write_packet(bytemuck::cast_slice(&usb_data)).await?;
-                            i = 0;
-                        }
-                    }
-                }
-            }
-            Either::Second(res) => {
-                let n = res?;
-                ppk2_process_command(class, &buf[..n], &mut send_data_enable, power_out_enable)
-                    .await?;
-            }
-        }
-    }
 }

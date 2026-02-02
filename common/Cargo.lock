@@ -120,6 +120,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2d7e60934ceec538daadb9d8432424ed043a904d8e0243f3c6446bce549a46ac"
 
 [[package]]
+name = "bitfield-struct"
+version = "0.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8769c4854c5ada2852ddf6fd09d15cf43d4c2aaeccb4de6432f5402f08a6003b"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.112",
+]
+
+[[package]]
 name = "bitflags"
 version = "1.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -866,11 +877,14 @@ dependencies = [
 name = "ob-link-common"
 version = "0.1.0"
 dependencies = [
+ "bitfield-struct",
+ "bytemuck",
  "defmt",
  "embassy-futures",
  "embassy-rp",
  "embassy-stm32",
  "embassy-usb",
+ "embedded-hal 1.0.0",
  "embedded-io-async",
  "static_cell",
 ]

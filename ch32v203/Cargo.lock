@@ -126,6 +126,7 @@ dependencies = [
  "embassy-usb",
  "embedded-hal 1.0.0",
  "ob-dap",
+ "ob-link-common",
  "panic-halt",
  "portable-atomic",
  "qingke",
@@ -625,6 +626,19 @@ version = "0.1.0"
 dependencies = [
  "dap-rs",
  "embedded-hal 1.0.0",
+]
+
+[[package]]
+name = "ob-link-common"
+version = "0.1.0"
+dependencies = [
+ "bitfield-struct",
+ "bytemuck",
+ "embassy-futures",
+ "embassy-usb",
+ "embedded-hal 1.0.0",
+ "embedded-io-async",
+ "static_cell",
 ]
 
 [[package]]

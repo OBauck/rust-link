@@ -711,10 +711,13 @@ dependencies = [
 name = "ob-link-common"
 version = "0.1.0"
 dependencies = [
+ "bitfield-struct",
+ "bytemuck",
  "defmt 1.0.1",
  "embassy-futures",
  "embassy-stm32",
  "embassy-usb",
+ "embedded-hal 1.0.0",
  "embedded-io-async",
  "static_cell",
 ]
