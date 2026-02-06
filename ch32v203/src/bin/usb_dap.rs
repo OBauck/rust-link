@@ -10,11 +10,23 @@ use embedded_hal::digital::PinState;
 use hal::gpio::{Flex, Level, Output, Pull, Speed};
 use hal::pac::{systick, SYSTICK};
 use hal::usbd::Driver;
-use hal::{bind_interrupts, peripherals, println};
+use hal::{bind_interrupts, peripherals, println as ch32_println};
 
 use ob_dap::{self, Context, DbgDelay, DbgPin, Swo};
 
 use static_cell::StaticCell;
+
+#[macro_export]
+macro_rules! my_println {
+    ($($arg:tt)*) => {
+        ()
+    };
+}
+
+// Println fucks up because it is blocking
+// When no debugger is connected, the fw just hangs
+// TODO: Switch to ringbuffer + defmt (see defmt_rtt crate for inspiration or use this: https://crates.io/crates/defmt-bbq)
+use my_println as println;
 
 bind_interrupts!(struct Irqs {
     USB_LP_CAN1_RX0 => hal::usbd::InterruptHandler<hal::peripherals::USBD>;
@@ -28,6 +40,35 @@ fn panic(_info: &core::panic::PanicInfo) -> ! {
     println!("Panic!");
 
     loop {}
+}
+
+fn bytes_to_hex<'a>(bytes: &[u8], out: &'a mut [u8]) -> Result<&'a str, ()> {
+    // Need exactly 2 chars per byte
+    if out.len() < bytes.len() * 2 {
+        return Err(());
+    }
+
+    let mut i = 0;
+    for &b in bytes {
+        let hi = b >> 4;
+        let lo = b & 0x0F;
+
+        out[i] = hex_char(hi);
+        out[i + 1] = hex_char(lo);
+        i += 2;
+    }
+
+    // SAFETY: we only write valid ASCII hex characters
+    Ok(core::str::from_utf8(&out[..i]).unwrap())
+}
+
+#[inline]
+const fn hex_char(n: u8) -> u8 {
+    match n {
+        0..=9 => b'0' + n,
+        10..=15 => b'A' + (n - 10),
+        _ => b'?',
+    }
 }
 
 #[embassy_executor::task]
@@ -97,13 +138,21 @@ async fn main(spawner: Spawner) {
     let mut config = embassy_usb::Config::new(0x1a86, 0x7021);
     config.manufacturer = Some("Bauck");
     config.product = Some("OB-Link-CH32V203 (CMSIS-DAP v2)"); // Need to have "CMSIS-DAP" in the product name to make probe-rs recognize it
-    config.serial_number = Some("12345678");
+
+    // We set serial number to be hex representation of byte 2 to 7 (6 bytes) of the chips unique ID,
+    // as it seems that these distinguish two ch32v203 chips from each other.
+    // For example [0xAB, 0xCD, 0xEF, 0x12, 0x34, 0x56] will be "ABCDEF123456"
+    static UID_STR: StaticCell<[u8; 12]> = StaticCell::new();
+    let uid_str = UID_STR.init([0; 12]);
+    let uid = hal::signature::unique_id();
+    let str = bytes_to_hex(&uid[2..8], uid_str).unwrap();
+    config.serial_number = Some(str);
 
     let mut builder = {
         static CONFIG_DESCRIPTOR: StaticCell<[u8; 256]> = StaticCell::new();
         static BOS_DESCRIPTOR: StaticCell<[u8; 256]> = StaticCell::new();
         static MSOS_DESCRIPTOR: StaticCell<[u8; 256]> = StaticCell::new();
-        static CONTROL_BUF: StaticCell<[u8; 64]> = StaticCell::new();
+        static CONTROL_BUF: StaticCell<[u8; 96]> = StaticCell::new();
 
         let builder = embassy_usb::Builder::new(
             driver,
@@ -111,7 +160,7 @@ async fn main(spawner: Spawner) {
             CONFIG_DESCRIPTOR.init([0; 256]),
             BOS_DESCRIPTOR.init([0; 256]),
             MSOS_DESCRIPTOR.init([0; 256]),
-            CONTROL_BUF.init([0; 64]),
+            CONTROL_BUF.init([0; 96]),
         );
         builder
     };

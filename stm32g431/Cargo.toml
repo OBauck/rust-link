@@ -28,7 +28,7 @@ bytemuck = { version = "1.21", default-features = false}
 static_cell = "2.1"
 portable-atomic = "1.3"
 
-dap-rs = "0.2"
+dap-rs = {version = "0.2", features = ["defmt"]}
 ob-dap = { path = "../ob-dap" }
 ob-link-common = {path = "../common", features = ["stm32", "defmt"]}
 
