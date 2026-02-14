@@ -12,6 +12,7 @@ use embassy_usb::class::cdc_acm::{CdcAcmClass, State};
 use {defmt_rtt as _, panic_probe as _};
 
 use ob_link_common::usb_ppk2::{run as ppk2_run, Adc};
+use ob_link_common::usb_ppk2_dfu::Ppk2DfuClass;
 use static_cell::StaticCell;
 
 bind_interrupts!(struct Irqs {
@@ -104,7 +105,8 @@ async fn main(spawner: Spawner) {
     let driver = Driver::new(p.USB, Irqs, p.PA12, p.PA11);
 
     // Create embassy-usb Config
-    let mut config = embassy_usb::Config::new(0xC0DE, 0xCAFE);
+    // usb vid and pid needs to be Nordic Semiconductor for power profiler application to recognize it
+    let mut config = embassy_usb::Config::new(0x1915, 0xc00a);
     config.manufacturer = Some("Bauck");
     config.product = Some("OB-Link (ppk2)");
     config.serial_number = Some("12345678");
@@ -130,6 +132,9 @@ async fn main(spawner: Spawner) {
         );
         builder
     };
+
+    // Create ppk2 dfu class to make power profiler application to recognize it
+    Ppk2DfuClass::new(&mut builder);
 
     // Create classes on the builder.
     let class = {

@@ -25,6 +25,7 @@ use hal::timer::low_level::Timer as LowLevelTimer;
 use hal::usbd::Driver;
 
 use ob_link_common::usb_ppk2::{run as ppk2_run, Adc};
+use ob_link_common::usb_ppk2_dfu::Ppk2DfuClass;
 
 use static_cell::StaticCell;
 
@@ -87,8 +88,8 @@ where
     T: BasicInstance,
 {
     async fn read_data(&mut self) -> &[u16] {
-        if let Err(err) = self.ring_buffer.read_exact(self.data_buffer).await {
-            println!("Error: {:?}", err);
+        if let Err(_err) = self.ring_buffer.read_exact(self.data_buffer).await {
+            println!("Error: {:?}", _err);
             self.ring_buffer.clear();
         }
         self.data_buffer
@@ -215,7 +216,8 @@ async fn main(spawner: Spawner) {
     let driver = Driver::new(p.USBD, Irqs, p.PA12, p.PA11);
 
     // Create embassy-usb Config
-    let mut config = embassy_usb::Config::new(0xC0DE, 0xCAFE);
+    // usb vid and pid needs to be Nordic Semiconductor for power profiler application to recognize it
+    let mut config = embassy_usb::Config::new(0x1915, 0xc00a);
     config.manufacturer = Some("Bauck");
     config.product = Some("OB-Link (PPK2)");
     config.serial_number = Some("12345678");
@@ -229,7 +231,6 @@ async fn main(spawner: Spawner) {
     let mut builder = {
         static CONFIG_DESCRIPTOR: StaticCell<[u8; 256]> = StaticCell::new();
         static BOS_DESCRIPTOR: StaticCell<[u8; 256]> = StaticCell::new();
-        static MSOS_DESCRIPTOR: StaticCell<[u8; 256]> = StaticCell::new();
         static CONTROL_BUF: StaticCell<[u8; 64]> = StaticCell::new();
 
         let builder = embassy_usb::Builder::new(
@@ -237,11 +238,13 @@ async fn main(spawner: Spawner) {
             config,
             CONFIG_DESCRIPTOR.init([0; 256]),
             BOS_DESCRIPTOR.init([0; 256]),
-            MSOS_DESCRIPTOR.init([0; 256]),
+            &mut [], // no msos descriptors
             CONTROL_BUF.init([0; 64]),
         );
         builder
     };
+
+    Ppk2DfuClass::new(&mut builder);
 
     let class = {
         static STATE: StaticCell<State> = StaticCell::new();
