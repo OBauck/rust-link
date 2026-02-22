@@ -15,7 +15,7 @@ use ch32_hal::timer::{BasicInstance, CoreInstance};
 use embassy_executor::Spawner;
 use embassy_usb::class::cdc_acm::{CdcAcmClass, State};
 
-use ch32_hal::{self as hal, bind_interrupts, pac, Peripheral, PeripheralRef};
+use ch32_hal::{self as hal, bind_interrupts, pac, Peri};
 use hal::adc::{AdcChannel, AnyAdcChannel, SampleTime};
 use hal::dma::{ReadableRingBuffer, Request, TransferOptions};
 use hal::gpio::{Level, Output, Speed};
@@ -108,7 +108,7 @@ where
 }
 
 fn dma_setup<'d>(
-    dma_channel: PeripheralRef<'d, DMA1_CH1>,
+    dma_channel: Peri<'d, DMA1_CH1>,
     adc_buffer: &'d mut [u16],
 ) -> ReadableRingBuffer<'d, u16> {
     let mut dma_options = TransferOptions::default();
@@ -175,10 +175,10 @@ fn adc_setup() {
 #[embassy_executor::task]
 async fn ppk2_task(
     class: CdcAcmClass<'static, Driver<'static, USBD>>,
-    power_out_enable_pin: PB4,
-    adc_pin: PA6,
-    dma_channel: PeripheralRef<'static, DMA1_CH1>,
-    timer: TIM3,
+    power_out_enable_pin: Peri<'static, PB4>,
+    adc_pin: Peri<'static, PA6>,
+    dma_channel: Peri<'static, DMA1_CH1>,
+    timer: Peri<'static, TIM3>,
 ) -> ! {
     let mut power_out_enable = Output::new(power_out_enable_pin, Level::Low, Speed::Low);
     power_out_enable.set_high();
@@ -256,13 +256,7 @@ async fn main(spawner: Spawner) {
     let mut usb = builder.build();
 
     spawner
-        .spawn(ppk2_task(
-            class,
-            p.PB4,
-            p.PA6,
-            p.DMA1_CH1.into_ref(),
-            p.TIM3,
-        ))
+        .spawn(ppk2_task(class, p.PB4, p.PA6, p.DMA1_CH1, p.TIM3))
         .unwrap();
 
     // Run the USB device.

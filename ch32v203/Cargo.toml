@@ -3,15 +3,25 @@ name = "ch32v203"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+ch32v203c6t6 = ["ch32-hal/ch32v203c6t6"]
+ch32v203c8t6 = ["ch32-hal/ch32v203c8t6"]
+ch32v203c8u6 = ["ch32-hal/ch32v203c8u6"]
+ch32v203f6p6 = ["ch32-hal/ch32v203f6p6"]
+ch32v203f8p6 = ["ch32-hal/ch32v203f8p6"]
+ch32v203f8u6 = ["ch32-hal/ch32v203f8u6"]
+ch32v203g6u6 = ["ch32-hal/ch32v203g6u6"]
+ch32v203g8r6 = ["ch32-hal/ch32v203g8r6"]
+ch32v203k6t6 = ["ch32-hal/ch32v203k6t6"]
+ch32v203k8t6 = ["ch32-hal/ch32v203k8t6"]
+ch32v203rbt6 = ["ch32-hal/ch32v203rbt6"]
+
 [dependencies]
-# TODO: Change this back to https://github.com/ch32-rs/ch32-hal.git when this PR is merged: https://github.com/ch32-rs/ch32-hal/pull/137
-ch32-hal = { git = "https://github.com/moore/ch32-hal.git", features = [
-    "ch32v203g6u6",
+ch32-hal = { git = "https://github.com/ch32-rs/ch32-hal.git", rev = "ece4fcc086209506ae4f61772b448b7c9343e3a2", features = [
     "embassy",
     "time-driver-tim2",
     "rt",
     "memory-x",
-    # "defmt",
 ] }
 # Must use spin because of broken WFI + USB: https://github.com/ch32-rs/ch32-hal/pull/94#issuecomment-3194601636
 embassy-executor = { version = "0.9.1", features = [
@@ -25,8 +35,8 @@ embassy-usb = { version = "0.5", features = [
 embassy-time = { version = "0.5.0" }
 embassy-futures = "0.1.2"
 
-qingke-rt = "0.5.0"
-qingke = "0.5.0"
+qingke-rt = "0.6.1"
+qingke = "0.6.1"
 embedded-hal = "1.0.0"
 panic-halt = "1.0.0"
 bitfield-struct = "0.12"
@@ -39,7 +49,12 @@ ob-dap = { path = "../ob-dap" }
 ob-link-common = {path = "../common"}
 
 [profile.dev]
+codegen-units = 1
+debug = 2
+debug-assertions = true
+incremental = false
 opt-level = 's'
+overflow-checks = true
 
 [profile.release]
 strip = false     # symbols are not flashed to the microcontroller, so don't strip them.
@@ -48,6 +63,6 @@ debug = 2
 debug-assertions = false
 incremental = false
 lto = 'fat'
-# Should use opt-level = 3 to get better speed when running dap, but this will use more than 32K of flash (about 35782 => 3014 bytes too much)
+# opt-level = 3 makes code slightly faster (see readme usb-dap test results), but then code wont fit in 32k flash chips
 opt-level = 's'
 overflow-checks = false
