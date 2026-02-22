@@ -708,21 +708,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ob-link-common"
-version = "0.1.0"
-dependencies = [
- "bitfield-struct",
- "bytemuck",
- "defmt 1.0.1",
- "embassy-futures",
- "embassy-stm32",
- "embassy-usb",
- "embedded-hal 1.0.0",
- "embedded-io-async",
- "static_cell",
-]
-
-[[package]]
 name = "once_cell"
 version = "1.21.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -819,6 +804,21 @@ name = "replace_with"
 version = "0.1.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "51743d3e274e2b18df81c4dc6caf8a5b8e15dbe799e0dca05c7617380094e884"
+
+[[package]]
+name = "rust-link-common"
+version = "0.1.0"
+dependencies = [
+ "bitfield-struct",
+ "bytemuck",
+ "defmt 1.0.1",
+ "embassy-futures",
+ "embassy-stm32",
+ "embassy-usb",
+ "embedded-hal 1.0.0",
+ "embedded-io-async",
+ "static_cell",
+]
 
 [[package]]
 name = "rustc_version"
@@ -947,10 +947,10 @@ dependencies = [
  "embassy-usb",
  "embedded-hal 1.0.0",
  "ob-dap",
- "ob-link-common",
  "panic-halt",
  "panic-probe",
  "portable-atomic",
+ "rust-link-common",
  "static_cell",
 ]
 

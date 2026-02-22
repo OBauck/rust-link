@@ -24,8 +24,8 @@ use hal::time::Hertz;
 use hal::timer::low_level::Timer as LowLevelTimer;
 use hal::usbd::Driver;
 
-use ob_link_common::usb_ppk2::{run as ppk2_run, Adc};
-use ob_link_common::usb_ppk2_dfu::Ppk2DfuClass;
+use rust_link_common::usb_ppk2::{run as ppk2_run, Adc};
+use rust_link_common::usb_ppk2_dfu::Ppk2DfuClass;
 
 use static_cell::StaticCell;
 

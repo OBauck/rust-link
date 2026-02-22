@@ -874,22 +874,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ob-link-common"
-version = "0.1.0"
-dependencies = [
- "bitfield-struct",
- "bytemuck",
- "defmt",
- "embassy-futures",
- "embassy-rp",
- "embassy-stm32",
- "embassy-usb",
- "embedded-hal 1.0.0",
- "embedded-io-async",
- "static_cell",
-]
-
-[[package]]
 name = "once_cell"
 version = "1.21.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1134,6 +1118,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7c92f344f63f950ee36cf4080050e4dce850839b9175da38f9d2ffb69b4dbb21"
 dependencies = [
  "crc-any",
+]
+
+[[package]]
+name = "rust-link-common"
+version = "0.1.0"
+dependencies = [
+ "bitfield-struct",
+ "bytemuck",
+ "defmt",
+ "embassy-futures",
+ "embassy-rp",
+ "embassy-stm32",
+ "embassy-usb",
+ "embedded-hal 1.0.0",
+ "embedded-io-async",
+ "static_cell",
 ]
 
 [[package]]

@@ -3,13 +3,13 @@
 
 use defmt::info;
 use embassy_executor::Spawner;
+use embassy_rp::uart::{BufferedInterruptHandler, BufferedUart};
 use embassy_rp::usb::{Driver, InterruptHandler};
-use embassy_rp::uart::{BufferedUart, BufferedInterruptHandler};
 use embassy_rp::{bind_interrupts, peripherals};
 use embassy_usb::class::cdc_acm::{CdcAcmClass, State};
 use {defmt_rtt as _, panic_probe as _};
 
-use ob_link_common::usb_uart::run_split_uart as usb_uart_run;
+use rust_link_common::usb_uart::run_split_uart as usb_uart_run;
 use static_cell::StaticCell;
 
 bind_interrupts!(struct Irqs {

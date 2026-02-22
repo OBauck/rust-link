@@ -31,7 +31,7 @@ portable-atomic = "1.3"
 
 dap-rs = "0.2"
 ob-dap = { path = "../ob-dap" }
-ob-link-common = {path = "../common", features = ["rp", "defmt"]}
+rust-link-common = {path = "../common", features = ["rp", "defmt"]}
 
 # cargo build/run
 [profile.dev]
