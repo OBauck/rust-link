@@ -16,6 +16,8 @@ ch32v203k6t6 = ["ch32-hal/ch32v203k6t6"]
 ch32v203k8t6 = ["ch32-hal/ch32v203k8t6"]
 ch32v203rbt6 = ["ch32-hal/ch32v203rbt6"]
 
+default = ["ch32v203g6u6"]
+
 [dependencies]
 ch32-hal = { git = "https://github.com/ch32-rs/ch32-hal.git", rev = "ece4fcc086209506ae4f61772b448b7c9343e3a2", features = [
     "embassy",
