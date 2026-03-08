@@ -2,10 +2,11 @@
 #![no_main]
 
 use ch32_hal as hal;
+use ch32_hal::mode::Async;
 use embassy_executor::Spawner;
-use embassy_futures::join::join;
 use embassy_futures::select::{select, Either};
-use embassy_usb::class::cdc_acm::{CdcAcmClass, State};
+use embassy_usb::class::cdc_acm::{CdcAcmClass, ControlChanged, Receiver, Sender, State};
+use hal::usart::{Config as UartConfig, Uart, UartRx, UartTx};
 use hal::usbd::Driver;
 use hal::{bind_interrupts, peripherals, println as ch32_println};
 use static_cell::StaticCell;
@@ -24,6 +25,7 @@ use my_println as println;
 
 bind_interrupts!(struct Irqs {
     USB_LP_CAN1_RX0 => hal::usbd::InterruptHandler<hal::peripherals::USBD>;
+    USART2 => hal::usart::InterruptHandler<hal::peripherals::USART2>;
 });
 
 #[panic_handler]
@@ -35,38 +37,64 @@ fn panic(_info: &core::panic::PanicInfo) -> ! {
 }
 
 #[embassy_executor::task]
-async fn uart_task(class: CdcAcmClass<'static, Driver<'static, peripherals::USBD>>) -> ! {
+async fn usb_tx_uart_rx_task(
+    mut usb_tx: Sender<'static, Driver<'static, peripherals::USBD>>,
+    mut uart_rx: UartRx<'static, peripherals::USART2, Async>,
+    usb_control: ControlChanged<'static>,
+    mut uart_config: UartConfig,
+) -> ! {
     let mut buf = [0; 64];
 
-    let (mut usb_tx, mut usb_rx, usb_control) = class.split_with_control();
-
     loop {
-        join(usb_rx.wait_connection(), usb_tx.wait_connection()).await;
-        println!("Connected");
+        usb_tx.wait_connection().await;
+        println!("Usb tx Connected");
         loop {
-            match select(usb_control.control_changed(), usb_rx.read_packet(&mut buf)).await {
+            match select(
+                usb_control.control_changed(),
+                uart_rx.read_until_idle(&mut buf),
+            )
+            .await
+            {
                 Either::First(_) => {
-                    let baud = usb_rx.line_coding().data_rate();
-                    println!("Baud change: {:?}", baud);
+                    let baud = usb_tx.line_coding().data_rate();
+                    println!("Setting baud to: {}", baud);
+                    uart_config.baudrate = baud;
+                    if let Err(err) = uart_rx.set_config(&uart_config) {
+                        println!("Uart config error: {:?}", err);
+                    }
                 }
-                Either::Second(res) => match res {
-                    Err(err) => {
-                        println!("Usb rx error: {:?}. Assume disconnection", err);
-                        break;
+                Either::Second(Err(err)) => println!("uart rx error! {:?}", err),
+                Either::Second(Ok(n)) => {
+                    if let Err(err) = usb_tx.write_packet(&buf[..n]).await {
+                        println!("Usb tx error! {:?}", err)
                     }
-                    Ok(n) => {
-                        // Echo data
-                        if let Err(err) = usb_tx.write_packet(&buf[..n]).await {
-                            println!("Usb tx error: {:?}. Assume disconnection", err);
-                            break;
-                        }
-                    }
-                },
+                }
             }
         }
     }
 }
 
+#[embassy_executor::task]
+async fn usb_rx_uart_tx_task(
+    mut usb_rx: Receiver<'static, Driver<'static, peripherals::USBD>>,
+    mut uart_tx: UartTx<'static, peripherals::USART2, Async>,
+) -> ! {
+    let mut buf = [0; 64];
+    loop {
+        usb_rx.wait_connection().await;
+        println!("Usb rx Connected");
+        loop {
+            match usb_rx.read_packet(&mut buf).await {
+                Ok(n) => {
+                    if let Err(err) = uart_tx.write(&buf[..n]).await {
+                        println!("uart tx error! {:?}", err);
+                    }
+                }
+                Err(err) => println!("Usb rx error: {:?}"),
+            }
+        }
+    }
+}
 // If you are trying this and your USB device doesn't connect, the most
 // common issues are the RCC config and vbus_detection
 //
@@ -121,7 +149,30 @@ async fn main(spawner: Spawner) {
     // Build the builder.
     let mut usb = builder.build();
 
-    spawner.spawn(uart_task(class)).unwrap();
+    let uart_config = UartConfig::default();
+    let uart = Uart::new(
+        p.USART2,
+        p.PA3,
+        p.PA2,
+        Irqs,
+        p.DMA1_CH7,
+        p.DMA1_CH6,
+        uart_config,
+    )
+    .unwrap();
+
+    let (uart_tx, uart_rx) = uart.split();
+    let (usb_tx, usb_rx, usb_control) = class.split_with_control();
+
+    spawner
+        .spawn(usb_tx_uart_rx_task(
+            usb_tx,
+            uart_rx,
+            usb_control,
+            uart_config,
+        ))
+        .unwrap();
+    spawner.spawn(usb_rx_uart_tx_task(usb_rx, uart_tx)).unwrap();
 
     // Run the USB device.
     usb.run().await;
