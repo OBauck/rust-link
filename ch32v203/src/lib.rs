@@ -12,6 +12,31 @@ macro_rules! my_println {
     };
 }
 
+#[cfg(feature = "bootloader")]
+pub unsafe fn enable_backup_registers() {
+    ch32_hal::pac::RCC.apb1pcenr().modify(|w| {
+        w.set_pwren(true);
+        w.set_bkpen(true);
+    });
+    const R32_PWR_CTLR: usize = 0x40007000;
+    unsafe {
+        // BDP: Backup domain write enable
+        *(R32_PWR_CTLR as *mut u32) |= 1 << 8;
+    }
+}
+
+#[cfg(feature = "bootloader")]
+pub unsafe fn enter_bootloader() {
+    const R16_BKP_DATAR10: usize = 0x40006C28;
+    unsafe {
+        // Set R16_BKP_DATAR10 to 0x624c ('bL') to enter bootloader on next boot
+        *(R16_BKP_DATAR10 as *mut u16) = 0x624c;
+    }
+
+    // Reset chip to enter bootloader
+    ch32_hal::pac::PFIC.sctlr().write(|w| w.set_sysreset(true));
+}
+
 pub fn bytes_to_hex<'a>(bytes: &[u8], out: &'a mut [u8]) -> Result<&'a str, ()> {
     // Need exactly 2 chars per byte
     if out.len() < bytes.len() * 2 {

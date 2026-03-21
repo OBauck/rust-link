@@ -43,6 +43,14 @@ fn panic(_info: &core::panic::PanicInfo) -> ! {
 
 #[embassy_executor::main(entry = "qingke_rt::entry")]
 async fn main(spawner: Spawner) {
+    #[cfg(feature = "bootloader")]
+    unsafe {
+        qingke::register::mtvec::write(
+            0x00001000,
+            qingke::register::mtvec::TrapMode::VectoredAddress,
+        );
+    }
+
     let mut config = hal::Config::default();
     config.rcc = hal::rcc::Config::SYSCLK_FREQ_144MHZ_HSI;
     config.rcc.apb2_pre = ch32_hal::rcc::APBPrescaler::DIV2;

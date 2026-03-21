@@ -1,11 +1,59 @@
+//! This build script copies the `memory.x` file from the crate root into
+//! a directory where the linker can always find it at build time.
+//! For many projects this is optional, as the linker always searches the
+//! project root directory -- wherever `Cargo.toml` is. However, if you
+//! are using a workspace or have a more complicated build setup, this
+//! build script becomes required. Additionally, by requesting that
+//! Cargo re-run the build script whenever `memory.x` is changed,
+//! updating `memory.x` ensures a rebuild of the application with the
+//! new memory settings.
+
+#[cfg(feature = "bootloader")]
+fn linker_data() -> &'static [u8] {
+    #[cfg(any(
+        feature = "ch32v203c6t6",
+        feature = "ch32v203f6p6",
+        feature = "ch32v203g6u6",
+        feature = "ch32v203k6t6"
+    ))]
+    return include_bytes!("memory-with-bootloader-32k.x");
+    #[cfg(any(
+        feature = "ch32v203c8t6",
+        feature = "ch32v203c8u6",
+        feature = "ch32v203f8p6",
+        feature = "ch32v203f8u6",
+        feature = "ch32v203g8r6",
+        feature = "ch32v203k8t6"
+    ))]
+    return include_bytes!("memory-with-bootloader-64k.x");
+    #[cfg(feature = "ch32v203rbt6")]
+    return include_bytes!("memory-with-bootloader-128k.x");
+}
+
 fn main() {
+    #[cfg(feature = "bootloader")]
+    {
+        use std::env;
+        use std::fs::File;
+        use std::io::Write;
+        use std::path::PathBuf;
+        // If we use a bootloader, then we want to alter flash origin to 0x1000
+        // We do this by giving the linker a different memory.x file
+        let out = &PathBuf::from(env::var_os("OUT_DIR").unwrap());
+        File::create(out.join("memory.x"))
+            .unwrap()
+            .write_all(linker_data())
+            .unwrap();
+        println!("cargo::rustc-link-search={}", out.display());
+
+        // By default, Cargo will re-run a build script whenever
+        // any file in the project changes. By specifying `memory.x`
+        // here, we ensure the build script is only re-run when
+        // `memory.x` is changed.
+        println!("cargo::rerun-if-changed=memory.x");
+    }
+
     // println!("cargo:rustc-link-arg-bins=--nmagic");
     println!("cargo:rustc-link-arg-bins=-Tlink.x");
     // println!("cargo:rustc-link-arg-bins=-Tdefmt.x");
-
-    // let out_dir = std::env::var("OUT_DIR").unwrap();
-    // let out_dir = std::path::PathBuf::from(out_dir);
-    // std::fs::write(out_dir.join("memory.x"), include_bytes!("memory.x")).unwrap();
-    // println!("cargo:rustc-link-search={}", out_dir.display());
-    // println!("cargo:rerun-if-changed=memory.x");
 }

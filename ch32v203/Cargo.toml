@@ -16,6 +16,8 @@ ch32v203k6t6 = ["ch32-hal/ch32v203k6t6"]
 ch32v203k8t6 = ["ch32-hal/ch32v203k8t6"]
 ch32v203rbt6 = ["ch32-hal/ch32v203rbt6"]
 
+bootloader = []
+
 default = ["ch32v203g6u6"]
 
 [dependencies]

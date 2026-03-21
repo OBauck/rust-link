@@ -2,8 +2,9 @@
 target = "riscv32imc-unknown-none-elf"
 
 [target."riscv32imc-unknown-none-elf"]
-# runner = "wlink -v flash --enable-sdi-print --watch-serial --erase"
-runner = "wchisp flash"
+# runner = "wlink flash"
+# runner = "wchisp flash"
+runner = "./uf2_flash.sh"
 
 # runner = "probe-rs run --chip ch32v203"
 # runner = "arm-none-eabi-size"
