@@ -21,6 +21,10 @@ pub async fn usb_tx_uart_rx_task(
     mut uart_config: UartConfig,
 ) -> ! {
     let mut buf = [0; 64];
+    #[cfg(feature = "bootloader")]
+    unsafe {
+        crate::enable_backup_registers();
+    }
 
     loop {
         usb_tx.wait_connection().await;
@@ -34,6 +38,10 @@ pub async fn usb_tx_uart_rx_task(
             {
                 Either::First(_) => {
                     let baud = usb_tx.line_coding().data_rate();
+                    #[cfg(feature = "bootloader")]
+                    if baud == 1337 {
+                        unsafe { crate::enter_bootloader() }
+                    }
                     println!("Setting baud to: {}", baud);
                     uart_config.baudrate = baud;
                     if let Err(err) = uart_rx.set_config(&uart_config) {
