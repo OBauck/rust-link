@@ -1,0 +1,33 @@
+[workspace]
+members = [
+    "ch32v203",
+    "common",
+    "ob-dap",
+    "rp235x",
+    "stm32g431",
+]
+
+resolver = "3"
+
+# cargo build/run
+[profile.dev]
+codegen-units = 1
+debug = 2
+debug-assertions = true
+incremental = false
+opt-level = 3           
+overflow-checks = true
+
+# cargo build/run --release
+[profile.release]
+strip = false     # symbols are not flashed to the microcontroller, so don't strip them.
+codegen-units = 1 # LLVM can perform better optimizations using a single thread
+debug = 2
+debug-assertions = false
+incremental = false
+lto = 'fat'
+opt-level = 3
+overflow-checks = false
+
+[profile.release.package.ch32v203]
+opt-level = 's'        # Override: Make code fit in 32KB variants. Opt-level = 3 makes code slightly faster (see ch32v203 readme for usb-dap test results)
