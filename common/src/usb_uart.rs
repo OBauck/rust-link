@@ -72,22 +72,9 @@ pub async fn run<'d, D: Driver<'d>>(
                     break;
                 }
                 Either3::Second(Ok(n)) => {
-                    let mut bytes_sent = 0;
-                    loop {
-                        match usart.write(&usb_buf[bytes_sent..n]).await {
-                            Err(_err) => {
-                                #[cfg(feature = "defmt")]
-                                defmt::error!(
-                                    "Unable to write to usart: {:?}. Disguarding all remaining ({}) bytes",
-                                    defmt::Debug2Format(&_err),
-                                    n - bytes_sent
-                                );
-                            }
-                            Ok(sent) => bytes_sent += sent,
-                        }
-                        if bytes_sent == n {
-                            break;
-                        }
+                    if let Err(_err) = usart.write_all(&usb_buf[..n]).await {
+                        #[cfg(feature = "defmt")]
+                        defmt::error!("Unable to write to usart: {:?}", defmt::Debug2Format(&_err),);
                     }
                 }
                 Either3::Third(Err(_err)) => {
@@ -168,23 +155,12 @@ pub async fn run_split_uart<'d, D: Driver<'d>>(
                         break;
                     }
                     Either::Second(Ok(n)) => {
-                        let mut start = 0;
-                        loop {
-                            match usart_tx.write(&usb_buf[start..n]).await {
-                                Err(_err) => {
-                                    #[cfg(feature = "defmt")]
-                                    defmt::error!(
-                                        "Unable to write to usart: {:?}",
-                                        defmt::Debug2Format(&_err)
-                                    );
-                                }
-                                Ok(bytes_sent) => {
-                                    start += bytes_sent;
-                                }
-                            }
-                            if start == n {
-                                break;
-                            }
+                        if let Err(_err) = usart_tx.write_all(&usb_buf[..n]).await {
+                            #[cfg(feature = "defmt")]
+                            defmt::error!(
+                                "Unable to write to usart: {:?}",
+                                defmt::Debug2Format(&_err),
+                            );
                         }
                     }
                 }
