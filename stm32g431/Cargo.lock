@@ -978,6 +978,7 @@ dependencies = [
  "defmt 1.0.1",
  "defmt-rtt",
  "embassy-executor",
+ "embassy-futures",
  "embassy-stm32",
  "embassy-time",
  "embassy-usb",

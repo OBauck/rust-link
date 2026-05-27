@@ -63,3 +63,15 @@ probe-rs run --chip nRF52840_xxAA --speed 8000 --log-format "{t} {L} {s}" test/b
   Programming ✔ 100% [####################] 252.00 KiB @  83.92 KiB/s (took 3s)                               
       Finished in 8.64s
 ```
+
+### USB serial echo Example
+
+#### Test results
+We need over 400 kB/s to be able to stream 100ksamples/s to power profiler application (32bit per data).
+
+```
+dd if=/dev/zero of=/dev/ttyACM1 count=10000
+10000+0 records in
+10000+0 records out
+5120000 bytes (5.1 MB, 4.9 MiB) copied, 8.46966 s, 605 kB/s
+```

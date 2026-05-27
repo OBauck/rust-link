@@ -21,6 +21,8 @@ embassy-usb = { version = "0.5", features = [
     "max-handler-count-5"
 ]}
 embassy-time = { version = "0.5.0", features = ["defmt-timestamp-uptime"] }
+embassy-futures = "0.1.2"
+
 
 embedded-hal = "1.0.0"
 panic-halt = "1.0.0"
